@@ -5,18 +5,15 @@ services:
     build: ./backend
     container_name: smt-wallet-api
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3001:3001"
+    network_mode: host
     environment:
       - PORT=3001
-      - RPC_HOST=172.17.0.1
+      - RPC_HOST=127.0.0.1
       - RPC_PORT=8282
       - RPC_USER=smt_rpc
       - RPC_PASS=${RPC_PASS}
       - CORS_ORIGIN=https://wallet.smartiecoin.com
-      - EXPLORER_URL=http://172.17.0.1:8092
-    networks:
-      - wallet
+      - EXPLORER_URL=http://127.0.0.1:8092
 
   frontend:
     image: nginx:alpine

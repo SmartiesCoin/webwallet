@@ -77,34 +77,28 @@ export async function getUtxos(address: string): Promise<ExplorerUtxo[]> {
   }
 }
 
+export interface ExplorerTx {
+  txid: string;
+  sent: number;     // coins sent TO this address in this tx
+  received: number;  // coins received FROM this address in this tx
+  balance: number;   // running balance after this tx
+  timestamp: number;
+}
+
 // Get address transaction history
 export async function getAddressTxs(
   address: string,
   start = 0,
   length = 50
-): Promise<Array<{
-  txid: string;
-  type: string;
-  amount: number;
-  timestamp: number;
-  blockindex: number;
-}>> {
+): Promise<ExplorerTx[]> {
   try {
-    const data = await explorerFetch<
-      | Array<{ addresses: string; type: string }>
-      | { error: string }
-    >(`/ext/getaddresstxs/${address}/${start}/${length}`);
+    const data = await explorerFetch<ExplorerTx[] | { error: string }>(
+      `/ext/getaddresstxs/${address}/${start}/${length}`
+    );
     if (!Array.isArray(data)) {
       return [];
     }
-    // eIquidus returns txids as strings in addresses field
-    return data.map((tx) => ({
-      txid: tx.addresses,
-      type: tx.type,
-      amount: 0,
-      timestamp: 0,
-      blockindex: 0,
-    }));
+    return data;
   } catch {
     return [];
   }

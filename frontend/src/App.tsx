@@ -1,4 +1,5 @@
 import { Layout } from './components/Layout';
+import logoImg from './assets/logo.png';
 import { CreateWallet } from './components/CreateWallet';
 import { BackupMnemonic } from './components/BackupMnemonic';
 import { UnlockWallet } from './components/UnlockWallet';
@@ -21,15 +22,29 @@ function App() {
         return (
           <div className="space-y-8 text-center py-12">
             <div>
-              <div className="w-20 h-20 bg-smt-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <div className="w-12 h-12 bg-smt-500 rounded-xl flex items-center justify-center font-bold text-2xl">
-                  S
-                </div>
-              </div>
+              <img src={logoImg} alt="Smartiecoin" className="w-20 h-20 rounded-3xl mx-auto mb-6" />
               <h1 className="text-3xl font-bold">Smartiecoin Wallet</h1>
               <p className="text-dark-400 mt-3 max-w-md mx-auto">
                 Secure, non-custodial web wallet. Your keys never leave your browser.
               </p>
+            </div>
+
+            <div className="card bg-dark-800/50 text-left max-w-md mx-auto space-y-3">
+              <h3 className="text-sm font-semibold text-smt-400">Self-Custody Wallet</h3>
+              <ul className="text-xs text-dark-300 space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">&#10003;</span>
+                  <span>Your private keys are encrypted and stored <strong className="text-white">only in your browser</strong>. Our server never has access to your keys or funds.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400 mt-0.5">&#10003;</span>
+                  <span>No registration, no accounts, no personal data collected.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-yellow-400 mt-0.5">&#9888;</span>
+                  <span><strong className="text-yellow-300">If you lose your 12-word recovery phrase, your funds are permanently lost.</strong> No one can recover them for you — not even us.</span>
+                </li>
+              </ul>
             </div>
 
             <div className="space-y-3 max-w-sm mx-auto">
@@ -46,11 +61,6 @@ function App() {
                 Import Existing Wallet
               </button>
             </div>
-
-            <p className="text-dark-600 text-xs max-w-sm mx-auto">
-              Your wallet is encrypted and stored locally in your browser.
-              No account needed. No data sent to any server.
-            </p>
           </div>
         );
 

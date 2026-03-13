@@ -1,6 +1,60 @@
 import { Router, Request, Response } from 'express';
 import { rpcCall } from './rpc';
-import { getBalance, getUtxos, getAddressTxs } from './explorer';
+import { getBalance, getAddressTxs, ExplorerAddress } from './explorer';
+
+// Build UTXOs by: explorer last_txs → getrawtransaction → gettxout
+async function buildUtxos(address: string): Promise<Array<{
+  txid: string;
+  vout: number;
+  amount: number;
+  scriptPubKey: string;
+}>> {
+  // 1. Get address info from explorer to find all txids involving this address
+  const res = await fetch(`${process.env.EXPLORER_URL || 'http://127.0.0.1:8092'}/ext/getaddress/${address}`);
+  if (!res.ok) return [];
+  const addrInfo = await res.json() as ExplorerAddress | { error: string };
+  if ('error' in addrInfo) return [];
+
+  // 2. Get txids where we received funds (vout type)
+  const voutTxids = addrInfo.last_txs
+    .filter((tx) => tx.type === 'vout')
+    .map((tx) => tx.addresses);
+
+  // 3. For each tx, find outputs to our address and check if still unspent
+  const utxos: Array<{ txid: string; vout: number; amount: number; scriptPubKey: string }> = [];
+
+  for (const txid of voutTxids) {
+    try {
+      const rawTx = await rpcCall('getrawtransaction', [txid, true]) as {
+        vout: Array<{
+          value: number;
+          n: number;
+          scriptPubKey: { hex: string; address?: string; addresses?: string[] };
+        }>;
+      };
+
+      for (const vout of rawTx.vout) {
+        const addrs = vout.scriptPubKey.addresses || (vout.scriptPubKey.address ? [vout.scriptPubKey.address] : []);
+        if (!addrs.includes(address)) continue;
+
+        // Check if this output is still unspent
+        const txout = await rpcCall('gettxout', [txid, vout.n]);
+        if (txout) {
+          utxos.push({
+            txid,
+            vout: vout.n,
+            amount: vout.value,
+            scriptPubKey: vout.scriptPubKey.hex,
+          });
+        }
+      }
+    } catch {
+      // Skip failed txids
+    }
+  }
+
+  return utxos;
+}
 
 const router = Router();
 
@@ -32,7 +86,7 @@ router.get('/balance/:address', async (req: Request<{ address: string }>, res: R
   }
 });
 
-// GET /api/utxos/:address - uses explorer API
+// GET /api/utxos/:address - builds UTXOs from explorer + RPC
 router.get('/utxos/:address', async (req: Request<{ address: string }>, res: Response) => {
   const address = req.params.address;
   if (!isValidAddress(address)) {
@@ -40,7 +94,7 @@ router.get('/utxos/:address', async (req: Request<{ address: string }>, res: Res
     return;
   }
   try {
-    const result = await getUtxos(address);
+    const result = await buildUtxos(address);
     res.json(result);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -48,7 +102,7 @@ router.get('/utxos/:address', async (req: Request<{ address: string }>, res: Res
   }
 });
 
-// GET /api/history/:address - uses explorer API for tx list, RPC for details
+// GET /api/history/:address - uses explorer API directly
 router.get('/history/:address', async (req: Request<{ address: string }>, res: Response) => {
   const address = req.params.address;
   if (!isValidAddress(address)) {
@@ -56,20 +110,7 @@ router.get('/history/:address', async (req: Request<{ address: string }>, res: R
     return;
   }
   try {
-    const txList = await getAddressTxs(address, 0, 50);
-
-    // Get full TX details from RPC for each txid
-    const txs = await Promise.all(
-      txList.map(async (tx) => {
-        try {
-          return await rpcCall('getrawtransaction', [tx.txid, true]);
-        } catch {
-          // If RPC fails for a specific TX, return basic info
-          return { txid: tx.txid, type: tx.type, error: 'details unavailable' };
-        }
-      })
-    );
-
+    const txs = await getAddressTxs(address, 0, 50);
     res.json(txs);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -77,7 +118,7 @@ router.get('/history/:address', async (req: Request<{ address: string }>, res: R
   }
 });
 
-// GET /api/tx/:txid - uses RPC
+// GET /api/tx/:txid - uses RPC (verbose/decoded)
 router.get('/tx/:txid', async (req: Request<{ txid: string }>, res: Response) => {
   const txid = req.params.txid;
   if (!isValidTxid(txid)) {
@@ -87,6 +128,22 @@ router.get('/tx/:txid', async (req: Request<{ txid: string }>, res: Response) =>
   try {
     const result = await rpcCall('getrawtransaction', [txid, true]);
     res.json(result);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    res.status(500).json({ error: message });
+  }
+});
+
+// GET /api/rawtx/:txid - raw hex for signing (nonWitnessUtxo)
+router.get('/rawtx/:txid', async (req: Request<{ txid: string }>, res: Response) => {
+  const txid = req.params.txid;
+  if (!isValidTxid(txid)) {
+    res.status(400).json({ error: 'Invalid txid' });
+    return;
+  }
+  try {
+    const hex = await rpcCall('getrawtransaction', [txid, false]);
+    res.json({ hex });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     res.status(500).json({ error: message });

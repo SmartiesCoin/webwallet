@@ -1,4 +1,5 @@
 import React from 'react';
+import logo from '../assets/logo.png';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,9 +26,7 @@ export function Layout({
       <header className="border-b border-dark-800 bg-dark-900/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-smt-500 rounded-lg flex items-center justify-center font-bold text-sm">
-              S
-            </div>
+            <img src={logo} alt="Smartiecoin" className="w-9 h-9 rounded-lg" />
             <span className="font-bold text-lg">Smartiecoin</span>
           </div>
 

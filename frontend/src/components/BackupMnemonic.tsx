@@ -7,7 +7,14 @@ interface BackupMnemonicProps {
 
 export function BackupMnemonic({ mnemonic, onConfirm }: BackupMnemonicProps) {
   const [confirmed, setConfirmed] = useState(false);
+  const [copied, setCopied] = useState(false);
   const words = mnemonic.split(' ');
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(mnemonic);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div className="space-y-6">
@@ -35,6 +42,13 @@ export function BackupMnemonic({ mnemonic, onConfirm }: BackupMnemonicProps) {
             </div>
           ))}
         </div>
+
+        <button
+          onClick={handleCopy}
+          className="mt-4 w-full py-2.5 rounded-xl text-sm font-medium transition-colors border border-dark-600 hover:border-smt-500 hover:text-smt-400 text-dark-300"
+        >
+          {copied ? 'Copied!' : 'Copy recovery phrase'}
+        </button>
       </div>
 
       <label className="flex items-start gap-3 cursor-pointer">

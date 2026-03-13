@@ -1,8 +1,8 @@
-import { Psbt, payments, Transaction } from 'bitcoinjs-lib';
+import { Psbt, Transaction } from 'bitcoinjs-lib';
 import ECPairFactory, { type ECPairAPI } from 'ecpair';
 import * as ecc from 'tiny-secp256k1';
 import { Buffer } from 'buffer';
-import { smartiecoin, COIN, DEFAULT_FEE_RATE } from './network';
+import { smartiecoin, COIN, DEFAULT_FEE_RATE, API_BASE } from './network';
 import { fetchUtxos } from './api';
 
 let _ECPair: ECPairAPI | null = null;
@@ -11,13 +11,12 @@ function getECPair(): ECPairAPI {
   return _ECPair;
 }
 
-// Raw UTXO from explorer API
+// Raw UTXO from API
 export interface ExplorerUTXO {
   txid: string;
   vout: number;
   amount: number;       // in coins (not duffs)
   scriptPubKey: string;
-  height: number;
 }
 
 // Normalized UTXO for internal use
@@ -26,13 +25,20 @@ export interface UTXO {
   outputIndex: number;
   satoshis: number;
   script: string;
-  height: number;
 }
 
 // Estimate transaction size for fee calculation
 // P2PKH: ~148 bytes per input, ~34 bytes per output, ~10 bytes overhead
 function estimateSize(inputCount: number, outputCount: number): number {
   return inputCount * 148 + outputCount * 34 + 10;
+}
+
+// Fetch raw transaction hex from backend
+async function fetchRawTxHex(txid: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/rawtx/${txid}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Failed to fetch raw tx');
+  return data.hex;
 }
 
 // Build and sign a transaction
@@ -80,6 +86,15 @@ export async function buildTransaction(params: {
     );
   }
 
+  // Fetch raw transactions for nonWitnessUtxo (required for P2PKH signing)
+  const rawTxCache = new Map<string, Buffer>();
+  for (const utxo of selected) {
+    if (!rawTxCache.has(utxo.txid)) {
+      const hex = await fetchRawTxHex(utxo.txid);
+      rawTxCache.set(utxo.txid, Buffer.from(hex, 'hex'));
+    }
+  }
+
   // Build the transaction using Psbt
   const keyPair = getECPair().fromPrivateKey(Buffer.from(privateKey), {
     network: smartiecoin,
@@ -87,26 +102,13 @@ export async function buildTransaction(params: {
 
   const psbt = new Psbt({ network: smartiecoin });
 
-  // Add inputs
+  // Add inputs with nonWitnessUtxo for P2PKH
   for (const utxo of selected) {
     psbt.addInput({
       hash: utxo.txid,
       index: utxo.outputIndex,
-      nonWitnessUtxo: undefined as unknown as Buffer, // Will use script-based signing
-      // For P2PKH we need the previous output script
+      nonWitnessUtxo: rawTxCache.get(utxo.txid)!,
     });
-
-    // Override: use legacy signing with script
-    const p2pkh = payments.p2pkh({
-      pubkey: Buffer.from(keyPair.publicKey),
-      network: smartiecoin,
-    });
-
-    // Re-add with proper utxo info
-    psbt.data.inputs[psbt.data.inputs.length - 1].witnessUtxo = {
-      script: Buffer.from(p2pkh.output!),
-      value: utxo.satoshis,
-    };
   }
 
   // Payment output

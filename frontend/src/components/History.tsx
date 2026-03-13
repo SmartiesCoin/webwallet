@@ -1,51 +1,11 @@
 import { useEffect, useState } from 'react';
-import { fetchHistory, type TxDetail } from '../lib/api';
-import { COIN } from '../lib/network';
+import { fetchHistory, type HistoryTx } from '../lib/api';
 
 interface HistoryProps {
   address: string;
 }
 
-interface SimpleTx {
-  txid: string;
-  type: 'sent' | 'received';
-  amount: number;
-  confirmations: number;
-  time?: number;
-}
-
-function parseTx(tx: TxDetail, myAddress: string): SimpleTx {
-  // Calculate how much was sent to us vs from us
-  let received = 0;
-  let sent = 0;
-
-  for (const vout of tx.vout) {
-    const addrs = vout.scriptPubKey.addresses || (vout.scriptPubKey.address ? [vout.scriptPubKey.address] : []);
-    const valueDuffs = Math.round(vout.value * COIN);
-    if (addrs.includes(myAddress)) {
-      received += valueDuffs;
-    }
-  }
-
-  for (const vin of tx.vin) {
-    const addrs = vin.addresses || (vin.address ? [vin.address] : []);
-    if (addrs.includes(myAddress)) {
-      sent += (vin.value || 0) * COIN;
-    }
-  }
-
-  const net = received - sent;
-
-  return {
-    txid: tx.txid,
-    type: net >= 0 ? 'received' : 'sent',
-    amount: Math.abs(net),
-    confirmations: tx.confirmations,
-    time: tx.time || tx.blocktime,
-  };
-}
-
-function formatTime(timestamp?: number): string {
+function formatTime(timestamp: number): string {
   if (!timestamp) return 'Pending';
   const date = new Date(timestamp * 1000);
   return date.toLocaleDateString(undefined, {
@@ -57,7 +17,7 @@ function formatTime(timestamp?: number): string {
 }
 
 export function History({ address }: HistoryProps) {
-  const [txs, setTxs] = useState<SimpleTx[]>([]);
+  const [txs, setTxs] = useState<HistoryTx[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,9 +27,9 @@ export function History({ address }: HistoryProps) {
     async function load() {
       try {
         setLoading(true);
-        const raw = await fetchHistory(address);
+        const data = await fetchHistory(address);
         if (cancelled) return;
-        setTxs(raw.map((tx) => parseTx(tx, address)));
+        setTxs(data);
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load history');
@@ -111,51 +71,53 @@ export function History({ address }: HistoryProps) {
         </div>
       ) : (
         <div className="space-y-2">
-          {txs.map((tx) => (
-            <div key={tx.txid} className="card flex items-center justify-between py-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    tx.type === 'received'
-                      ? 'bg-green-500/20 text-green-400'
-                      : 'bg-red-500/20 text-red-400'
-                  }`}
-                >
-                  {tx.type === 'received' ? (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                    </svg>
-                  )}
-                </div>
-                <div>
-                  <p className="font-medium text-sm">
-                    {tx.type === 'received' ? 'Received' : 'Sent'}
-                  </p>
-                  <p className="text-dark-500 text-xs">
-                    {formatTime(tx.time)}
-                    {tx.confirmations === 0 && (
-                      <span className="text-yellow-400 ml-2">Unconfirmed</span>
+          {txs.map((tx) => {
+            const isReceived = tx.received > 0;
+            const amount = isReceived ? tx.received : tx.sent;
+
+            return (
+              <div key={tx.txid} className="card flex items-center justify-between py-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isReceived
+                        ? 'bg-green-500/20 text-green-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {isReceived ? (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
                     )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">
+                      {isReceived ? 'Received' : 'Sent'}
+                    </p>
+                    <p className="text-dark-500 text-xs">
+                      {formatTime(tx.timestamp)}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p
+                    className={`font-mono font-medium ${
+                      isReceived ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {isReceived ? '+' : '-'}
+                    {amount.toFixed(8)}
                   </p>
+                  <p className="text-dark-500 text-xs">SMT</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p
-                  className={`font-mono font-medium ${
-                    tx.type === 'received' ? 'text-green-400' : 'text-red-400'
-                  }`}
-                >
-                  {tx.type === 'received' ? '+' : '-'}
-                  {(tx.amount / COIN).toFixed(8)}
-                </p>
-                <p className="text-dark-500 text-xs">SMT</p>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -11,7 +11,7 @@ export default defineConfig({
     },
   },
   define: {
-    'process.env': {},
+    'process': JSON.stringify({ env: {}, browser: true, version: '' }),
     global: 'globalThis',
   },
   server: {

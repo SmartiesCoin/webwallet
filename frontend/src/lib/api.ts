@@ -37,41 +37,19 @@ export async function fetchUtxos(address: string): Promise<UTXO[]> {
     outputIndex: u.vout,
     satoshis: Math.round(u.amount * COIN),
     script: u.scriptPubKey,
-    height: u.height,
   }));
 }
 
-export interface TxDetail {
+export interface HistoryTx {
   txid: string;
-  blockhash?: string;
-  blockheight?: number;
-  confirmations: number;
-  time?: number;
-  blocktime?: number;
-  vin: Array<{
-    txid: string;
-    vout: number;
-    value?: number;
-    addresses?: string[];
-    address?: string;
-  }>;
-  vout: Array<{
-    value: number;
-    n: number;
-    scriptPubKey: {
-      addresses?: string[];
-      address?: string;
-      type: string;
-    };
-  }>;
+  sent: number;      // coins sent TO this address
+  received: number;   // coins received FROM this address
+  balance: number;    // running balance
+  timestamp: number;
 }
 
-export async function fetchHistory(address: string): Promise<TxDetail[]> {
-  return apiFetch<TxDetail[]>(`/history/${address}`);
-}
-
-export async function fetchTx(txid: string): Promise<TxDetail> {
-  return apiFetch<TxDetail>(`/tx/${txid}`);
+export async function fetchHistory(address: string): Promise<HistoryTx[]> {
+  return apiFetch<HistoryTx[]>(`/history/${address}`);
 }
 
 export async function broadcastTx(hex: string): Promise<{ txid: string }> {
