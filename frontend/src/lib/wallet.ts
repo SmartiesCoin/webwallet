@@ -1,11 +1,15 @@
 import * as bip39 from 'bip39';
-import BIP32Factory from 'bip32';
+import BIP32Factory, { type BIP32API } from 'bip32';
 import * as ecc from 'tiny-secp256k1';
 import { payments } from 'bitcoinjs-lib';
 import { Buffer } from 'buffer';
 import { smartiecoin, DERIVATION_PATH } from './network';
 
-const bip32 = BIP32Factory(ecc);
+let _bip32: BIP32API | null = null;
+function getBip32(): BIP32API {
+  if (!_bip32) _bip32 = BIP32Factory(ecc);
+  return _bip32;
+}
 
 export interface WalletData {
   address: string;
@@ -25,7 +29,7 @@ export function deriveFromMnemonic(mnemonic: string): {
   publicKey: Uint8Array;
 } {
   const seed = bip39.mnemonicToSeedSync(mnemonic);
-  const root = bip32.fromSeed(Buffer.from(seed), smartiecoin);
+  const root = getBip32().fromSeed(Buffer.from(seed), smartiecoin);
   const child = root.derivePath(DERIVATION_PATH);
 
   if (!child.privateKey) {

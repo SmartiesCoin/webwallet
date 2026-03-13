@@ -1,11 +1,15 @@
 import { Psbt, payments, Transaction } from 'bitcoinjs-lib';
-import ECPairFactory from 'ecpair';
+import ECPairFactory, { type ECPairAPI } from 'ecpair';
 import * as ecc from 'tiny-secp256k1';
 import { Buffer } from 'buffer';
 import { smartiecoin, COIN, DEFAULT_FEE_RATE } from './network';
 import { fetchUtxos } from './api';
 
-const ECPair = ECPairFactory(ecc);
+let _ECPair: ECPairAPI | null = null;
+function getECPair(): ECPairAPI {
+  if (!_ECPair) _ECPair = ECPairFactory(ecc);
+  return _ECPair;
+}
 
 // Raw UTXO from explorer API
 export interface ExplorerUTXO {
@@ -77,7 +81,7 @@ export async function buildTransaction(params: {
   }
 
   // Build the transaction using Psbt
-  const keyPair = ECPair.fromPrivateKey(Buffer.from(privateKey), {
+  const keyPair = getECPair().fromPrivateKey(Buffer.from(privateKey), {
     network: smartiecoin,
   });
 
